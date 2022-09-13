@@ -3,13 +3,13 @@ minify JS/TS files using `esbuild` and `swc` down to ES5 (uses `deno`)
 
 ## Usage
 ```
-deno run --allow-read --allow-write --allow-net --allow-run --allow-env https://deno.land/x/esbuild_es5/esbuild [FILE1] [FILE2] ..
+deno run --allow-read --allow-write --allow-net --allow-run --allow-env https://deno.land/x/esbuild_es5/esbuild.js [FILE1] [FILE2] ..
 ```
 
 or
 
 ```
-deno install --allow-read --allow-write --allow-net --allow-run --allow-env https://deno.land/x/esbuild_es5/esbuild
+deno install --allow-read --allow-write --allow-net --allow-run --allow-env https://deno.land/x/esbuild_es5/esbuild.js
 
 esbuild [FILE1] [FILE2] ..
 ```
