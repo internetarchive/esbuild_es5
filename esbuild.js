@@ -17,13 +17,18 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.2'
+const VERSION = '1.0.3'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
     type: 'string',
     default: 'build',
     alias: 'o',
+  },
+  format: {
+    description: 'output format: iife, cjs, esm',
+    default: 'iife',
+    alias: 'f',
   },
   banner: {
     description: 'string banner (eg: license info) to put at the head of each built JS file',
@@ -110,7 +115,7 @@ async function builder() {
     sourcemap: true,
     loader: { '.js': 'jsx' },
     minify: false, // we minify later
-    format: 'iife',
+    format: OPTS.format,
     target: ['es6'], // AKA es2015 -- the lowest `esbuild` can go
     metafile: true,  // for `convertToES5()`
     // eslint-disable-next-line  no-use-before-define

@@ -21,6 +21,8 @@ Usage: esbuild [FILE1] [FILE2] ..
 Options:
   -o, --outdir                     directory for built files
                                                      [string] [default: "build"]
+  -f, --format                     output format: iife, cjs, esm
+                                                               [default: "iife"]
       --banner                     string banner (eg: license info) to put at the
                                    head of each built JS file
                                                           [string] [default: ""]
