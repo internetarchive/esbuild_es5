@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.3'
+const VERSION = '1.0.4'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -149,7 +149,7 @@ async function convertToES5(result) {
       const output = await swc.transform(Deno.readTextFileSync(srcfile), {
         jsc: { target: 'es5' },
         sourceMaps: true,
-        module: { type: 'commonjs' },
+        module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
         // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
         // do another ESBuild pass later only for minification
         // minify: true,
@@ -166,6 +166,10 @@ async function convertToES5(result) {
         minify: OPTS.minify,
         target: 'es5',
       })).code
+        .replace(/import [a-z0-9_]+ from"regenerator-runtime";/, '') // IF we used non `iife` format
+        // above, we are wanting an output file that can be `import` or `require` into *another*
+        // file.  So remove any slid in `import .. regenerator-runtime`.
+
 
       const dstfile = OPTS.names_always_end_with_min
         ? `${OPTS.outdir}/${basename(srcfile, '.js')}.min.js`
