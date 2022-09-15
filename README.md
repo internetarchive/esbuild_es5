@@ -37,6 +37,8 @@ Options:
       --names_always_end_with_min  even if you dont elect to `--minify`, still
                                    use `.min.js` for your built suffixes
                                                        [boolean] [default: true]
+      --verbose                    verbose (quite) information to stderr
+                                                      [boolean] [default: false]
   -h, --help                       Show help                           [boolean]
       --version                    Show version number                 [boolean]
 ```

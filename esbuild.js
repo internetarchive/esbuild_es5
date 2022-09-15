@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.5'
+const VERSION = '1.0.6'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -56,6 +56,11 @@ const OPTS = yargs(Deno.args).options({
     description: 'even if you dont elect to `--minify`, still use `.min.js` for your built suffixes',
     type: 'boolean',
     default: true,
+  },
+  verbose: {
+    description: 'verbose (quite) information to stderr',
+    type: 'boolean',
+    default: false,
   },
 })
   .usage('Usage: esbuild [FILE1] [FILE2] ..')
@@ -109,7 +114,7 @@ async function builder() {
       // eslint-disable-next-line  no-use-before-define
       httpPlugin,
     ],
-    // logLevel: 'verbose',
+    logLevel: OPTS.verbose ? 'verbose' : 'warning',
     bundle: true,
     outdir: OPTS.outdir,
     sourcemap: true,
@@ -165,6 +170,7 @@ async function convertToES5(result) {
       output.code = (await esbuild.transform(output.code, {
         minify: OPTS.minify,
         target: 'es5',
+        logLevel: OPTS.verbose ? 'verbose' : 'silent',
       })).code
         .replace(/import [^ ]+ from"regenerator-runtime";/, '') // IF we used non `iife` format
         // above, we are wanting an output file that can be `import` or `require` into *another*
@@ -235,10 +241,13 @@ const httpPlugin = {
     // handle the example import from unpkg.com but in reality this
     // would probably need to be more complex.
     build.onLoad({ filter: /.*/, namespace: 'http-url' }, async (args) => {
-      // warn(`Downloading: ${args.path}`)
-      if (!num_downloaded) writeAllSync(Deno.stderr, new TextEncoder().encode('[esbuild] Downloading https:// import(s) '))
-      writeAllSync(Deno.stderr, new TextEncoder().encode('.'))
-      num_downloaded += 1
+      if (OPTS.verbose) {
+        warn(`[esbuild] Downloading: ${args.path}`)
+      } else {
+        if (!num_downloaded) writeAllSync(Deno.stderr, new TextEncoder().encode('[esbuild] Downloading https:// import(s) '))
+        writeAllSync(Deno.stderr, new TextEncoder().encode('.'))
+        num_downloaded += 1
+      }
       const contents = await (await fetch(args.path)).text()
       return { contents }
     })
