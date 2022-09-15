@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.4'
+const VERSION = '1.0.5'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -166,7 +166,7 @@ async function convertToES5(result) {
         minify: OPTS.minify,
         target: 'es5',
       })).code
-        .replace(/import [a-z0-9_]+ from"regenerator-runtime";/, '') // IF we used non `iife` format
+        .replace(/import [^ ]+ from"regenerator-runtime";/, '') // IF we used non `iife` format
         // above, we are wanting an output file that can be `import` or `require` into *another*
         // file.  So remove any slid in `import .. regenerator-runtime`.
 
