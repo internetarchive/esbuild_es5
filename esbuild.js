@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.6'
+const VERSION = '1.0.7'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -76,8 +76,9 @@ const entryPoints = OPTS._
  */
 async function main() {
   OPTS.regenerator_inline = OPTS.regenerator_inline ?
-    // we prefix each output JS file w/ `regeneratorRuntime` -- so we won't need a separate polyfill
-    (await exe('wget -qO- https://esm.archive.org/v77/regenerator-runtime@0.13.9/es2015/runtime.js')).replace(/export\{\S+ as default\};/, '').concat('\n') : ''
+    // We prefix each output JS file w/ `regeneratorRuntime` -- so we wont need a separate polyfill.
+    // NOTE: we're using jsdelivr here so we can get the "raw source" (which is ES5).
+    (await exe('wget -qO- https://cdn.jsdelivr.net/npm/regenerator-runtime@0.13.9/runtime.js')).concat('\n') : ''
 
   if (!entryPoints.length) return
 
