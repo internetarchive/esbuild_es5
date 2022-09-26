@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.7'
+const VERSION = '1.0.8'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -152,14 +152,15 @@ async function convertToES5(result) {
   await Promise.all(
     outputs.map(async (srcfile) => {
       // warn('SWC ES5 THIS', Deno.readTextFileSync(srcfile))
-      const output = await swc.transform(Deno.readTextFileSync(srcfile), {
-        jsc: { target: 'es5' },
-        sourceMaps: true,
-        module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
-        // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
-        // do another ESBuild pass later only for minification
-        // minify: true,
-      })
+      const output = OPTS.format === 'iife' ?
+        await swc.transform(Deno.readTextFileSync(srcfile), {
+          jsc: { target: 'es5' },
+          sourceMaps: true,
+          module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
+          // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
+          // do another ESBuild pass later only for minification
+          // minify: true,
+        }) : { code: Deno.readTextFileSync(srcfile) }
 
       if (OPTS.regenerator_inline)
         output.code = output.code.replace(/require\("regenerator-runtime"\)/, 'regeneratorRuntime')
@@ -170,13 +171,9 @@ async function convertToES5(result) {
       // Also, add any banner/footer to each JS file, as well as sourcemap URL.
       output.code = (await esbuild.transform(output.code, {
         minify: OPTS.minify,
-        target: 'es5',
+        target: OPTS.format === 'iife' ? 'es5' : 'es6',
         logLevel: OPTS.verbose ? 'verbose' : 'silent',
       })).code
-        .replace(/import [^ ]+ from"regenerator-runtime";/, '') // IF we used non `iife` format
-        // above, we are wanting an output file that can be `import` or `require` into *another*
-        // file.  So remove any slid in `import .. regenerator-runtime`.
-
 
       const dstfile = OPTS.names_always_end_with_min
         ? `${OPTS.outdir}/${basename(srcfile, '.js')}.min.js`
