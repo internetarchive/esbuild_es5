@@ -1,9 +1,10 @@
-#!/usr/bin/env -S deno run --unstable --allow-read --allow-write --allow-run --allow-env --allow-net
+#!/usr/bin/env -S deno run --unstable --allow-read --allow-write --allow-run --allow-env --allow-net --allow-ffi
 /* eslint-disable semi */
-import * as esbuild from 'https://deno.land/x/esbuild@v0.15.6/mod.js'
+import * as esbuild from 'https://deno.land/x/esbuild@v0.15.15/mod.js'
 import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
+
 import yargs from 'https://deno.land/x/yargs/deno.ts'
-import { basename } from 'https://deno.land/std/path/mod.ts'
+import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
 import { writeAllSync } from 'https://deno.land/std/streams/conversion.ts'
 
 import { exe } from 'https://av.prod.archive.org/js/util/cmd.js'
@@ -62,6 +63,11 @@ const OPTS = yargs(Deno.args).options({
     type: 'boolean',
     default: false,
   },
+  stash: {
+    description: 'debug mode -- write import-ed files to /tmp/estash/ for inspection',
+    type: 'boolean',
+    default: false,
+  },
 })
   .usage('Usage: esbuild [FILE1] [FILE2] ..')
   .help()
@@ -70,6 +76,7 @@ const OPTS = yargs(Deno.args).options({
 const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
 
+const MAX_RETRIES = 5
 
 /**
  * Bundles and transpiles JS files
@@ -86,25 +93,24 @@ async function main() {
 
   warn('\n', { entryPoints })
 
-  try {
-    // eslint-disable-next-line  no-use-before-define
-    await builder()
-  } catch {
-    // It's common enough that `import https://esm.archive.org/lit` can _sometimes_ fail
-    // (seems like a race condition) maybe 10-25% of the time.  Retry once in case.
-    warn('\nsleeping 15s and retrying')
-    await exe('sleep 15')
+  for (let n = 0; n < MAX_RETRIES; n++) {
     try {
       // eslint-disable-next-line  no-use-before-define
       await builder()
-    } catch {
-      Deno.exit(1)
-    }
+
+      // build success
+      warn('\n[esbuild] done')
+      Deno.exit(0)
+      // eslint-disable-next-line no-empty
+    } catch {}
+
+    // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
+    // fail (seems like a race condition) maybe 10-25% of the time.
+    warn('\nsleeping 15s and retrying')
+    await exe('sleep 15')
   }
 
-  // build success
-  warn('\n[esbuild] done')
-  Deno.exit(0)
+  Deno.exit(1)
 }
 
 
@@ -202,12 +208,34 @@ async function convertToES5(result) {
 
 
 /**
+ * Auto upgrades http to https for typical servers.
+ * Nov 2022 we found all sorts of issues w/ `lit/decorators/` JS files -- probably some kind
+ * of multiple imports race condition.
+ * Let's avoid a 308 redir roundtrip, and this weird issues, and switch url to https.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function upgrade_url(url) {
+  const parsed = new URL(url)
+  return (
+    parsed.protocol === 'http:' &&
+    (parsed.hostname === 'esm.sh' || parsed.hostname.endsWith('.archive.org'))
+      ? url.replace(/^http:\/\//, 'https://')
+      : url
+  )
+}
+
+
+/**
  * Plugin that allows `import()` of fully-qualified URLs in JS that can be bundled and transpiled.
  *
  * Derived from:
  *   https://esbuild.github.io/plugins/#http-plugin
  *
- * TODO: switch to `esbuild-plugin-http-fetch` if/when we move `node` to `deno`
+ * TODO: consider switch to `esbuild-plugin-http-fetch`, eg:
+ *   import httpFetch from 'https://deno.land/x/esbuild_plugin_http_fetch/index.js'
+ * or possibly: https://deno.land/x/esbuild_plugin_http_imports
  */
 let num_downloaded = 0
 const httpPlugin = {
@@ -216,29 +244,29 @@ const httpPlugin = {
     warn('[esbuild] building')
     // Intercept import paths starting with "http:" and "https:" so
     // esbuild doesn't attempt to map them to a file system location.
-    // Tag them with the "http-url" namespace to associate them with
+    // Tag them with the "https-url" namespace to associate them with
     // this plugin.
     build.onResolve({ filter: /^https?:\/\// }, (args) => ({
-      path: args.path,
-      namespace: 'http-url',
+      path: upgrade_url(args.path),
+      namespace: 'https-url',
     }))
 
     // We also want to intercept all import paths inside downloaded
     // files and resolve them against the original URL. All of these
-    // files will be in the "http-url" namespace. Make sure to keep
-    // the newly resolved URL in the "http-url" namespace so imports
+    // files will be in the "https-url" namespace. Make sure to keep
+    // the newly resolved URL in the "https-url" namespace so imports
     // inside it will also be resolved as URLs recursively.
-    build.onResolve({ filter: /.*/, namespace: 'http-url' }, (args) => ({
+    build.onResolve({ filter: /.*/, namespace: 'https-url' }, (args) => ({
       // eslint-disable-next-line compat/compat
-      path: new URL(args.path, args.importer).toString(),
-      namespace: 'http-url',
+      path: upgrade_url(new URL(args.path, args.importer).toString()),
+      namespace: 'https-url',
     }))
 
     // When a URL is loaded, we want to actually download the content
     // from the internet. This has just enough logic to be able to
     // handle the example import from unpkg.com but in reality this
     // would probably need to be more complex.
-    build.onLoad({ filter: /.*/, namespace: 'http-url' }, async (args) => {
+    build.onLoad({ filter: /.*/, namespace: 'https-url' }, async (args) => {
       if (OPTS.verbose) {
         warn(`[esbuild] Downloading: ${args.path}`)
       } else {
@@ -246,7 +274,34 @@ const httpPlugin = {
         writeAllSync(Deno.stderr, new TextEncoder().encode('.'))
         num_downloaded += 1
       }
-      const contents = await (await fetch(args.path)).text()
+
+      const url = upgrade_url(args.path)
+
+      const ret = await fetch(url)
+
+      const stashfile = `/tmp/estash/${url}`.replace(/%5E/gi, '^').replace(/\?/, '')
+      if (OPTS.stash) {
+        Deno.mkdirSync(dirname(stashfile), { recursive: true })
+        // eslint-disable-next-line object-curly-newline
+        const { socket, data, parser, req, _readableState, _maxListeners, client, ...copy } = ret
+        Deno.writeTextFileSync(`${stashfile}.res`, JSON.stringify(copy))
+      }
+
+      if (!ret.ok || ret.status !== 200) {
+        warn('NOT OK', url, { ret })
+        throw new Error(`GET ${url} failed, status: ${ret.status}`)
+      }
+      let contents = await ret.text()
+
+      if (url.match(/https:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/customParseFormat.js/)) {
+        warn(`\nDAYJS WORKAROUND XXX ${url}`)
+        contents = contents.replace(/import\{.* as (.*)\}(from"\/v\d+\/dayjs.*\/plugin\/localizedFormat\/utils\.js")/, 'import {default as $1} $2')
+      }
+
+
+      if (OPTS.stash)
+        Deno.writeTextFileSync(`${stashfile}.contents`, contents)
+
       return { contents }
     })
   },
