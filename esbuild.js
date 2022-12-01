@@ -5,7 +5,7 @@ import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
 import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
-import { writeAllSync } from 'https://deno.land/std/streams/conversion.ts'
+import { writeAllSync } from 'https://deno.land/std/streams/write_all.ts'
 
 import { exe } from 'https://av.prod.archive.org/js/util/cmd.js'
 import { warn } from 'https://av.prod.archive.org/js/util/log.js'
