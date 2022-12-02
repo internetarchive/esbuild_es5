@@ -39,6 +39,9 @@ Options:
                                                        [boolean] [default: true]
       --verbose                    verbose (quite) information to stderr
                                                       [boolean] [default: false]
+      --stash                      debug mode -- write import-ed files to /tmp/e
+                                   stash/ for inspection
+                                                      [boolean] [default: false]
   -h, --help                       Show help                           [boolean]
       --version                    Show version number                 [boolean]
 ```
