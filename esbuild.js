@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.9'
+const VERSION = '1.0.10'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -293,7 +293,7 @@ const httpPlugin = {
       }
       let contents = await ret.text()
 
-      if (url.match(/https:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/customParseFormat.js/)) {
+      if (url.match(/https*:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/customParseFormat.js/)) {
         warn(`\nDAYJS WORKAROUND XXX ${url}`)
         contents = contents.replace(/import\{.* as (.*)\}(from"\/v\d+\/dayjs.*\/plugin\/localizedFormat\/utils\.js")/, 'import {default as $1} $2')
       }
