@@ -14,6 +14,11 @@ deno install --allow-read --allow-write --allow-net --allow-run --allow-env http
 esbuild [FILE1] [FILE2] ..
 ```
 
+
+## Warning
+`--format=es6` doesnt yet work with `--names_always_end_with_min=true` (latter gets ignored).
+
+
 Run with `-h` or `--help` to see detailed usage, eg:
 ```txt
 Usage: esbuild [FILE1] [FILE2] ..
@@ -21,7 +26,8 @@ Usage: esbuild [FILE1] [FILE2] ..
 Options:
   -o, --outdir                     directory for built files
                                                      [string] [default: "build"]
-  -f, --format                     output format: iife, cjs, esm
+  -f, --format                     output format: iife, cjs, esm, es6.  iife def
+                                   aults to es5.  esm implies es6.
                                                                [default: "iife"]
       --banner                     string banner (eg: license info) to put at the
                                    head of each built JS file

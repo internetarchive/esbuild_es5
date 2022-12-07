@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.10'
+const VERSION = '1.0.11'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -27,7 +27,7 @@ const OPTS = yargs(Deno.args).options({
     alias: 'o',
   },
   format: {
-    description: 'output format: iife, cjs, esm',
+    description: 'output format: iife, cjs, esm, es6.  iife defaults to es5.  esm implies es6.',
     default: 'iife',
     alias: 'f',
   },
@@ -77,6 +77,8 @@ const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
 
 const MAX_RETRIES = 5
+const ES6 = OPTS.format === 'es6' // ES6 only -- dont transpile down to ES5
+
 
 /**
  * Bundles and transpiles JS files
@@ -126,8 +128,10 @@ async function builder() {
     outdir: OPTS.outdir,
     sourcemap: true,
     loader: { '.js': 'jsx' },
-    minify: false, // we minify later
-    format: OPTS.format,
+    minify: ES6 ? OPTS.minify : false, // if we're making ES5, we'll minify later
+    format: ES6 ? 'iife' : OPTS.format,
+    banner: ES6 ? { js: `${OPTS.banner}\n${OPTS.regenerator_inline}` } : {},
+    footer: ES6 ? { js: OPTS.footer } : {},
     target: ['es6'], // AKA es2015 -- the lowest `esbuild` can go
     metafile: true,  // for `convertToES5()`
     // eslint-disable-next-line  no-use-before-define
@@ -146,6 +150,13 @@ async function builder() {
  *   https://github.com/evanw/esbuild/issues/297#issuecomment-961800886
  */
 async function convertToES5(result) {
+  if (ES6) {
+    // xxx needs just a bit more work to move the ES6 already created files to desired .min.js
+    // when OPTS.names_always_end_with_min -- also need to get the sourceMappingURL= adjusted right
+    warn({ result })
+    return
+  }
+
   warn('\n[swc] ES6 => ES5')
 
   const outputs = Object.keys(result.metafile.outputs)
@@ -185,7 +196,7 @@ async function convertToES5(result) {
         ? `${OPTS.outdir}/${basename(srcfile, '.js')}.min.js`
         : `${OPTS.outdir}/${basename(srcfile)}`
       const mapfile = `${dstfile}.map`
-      // console.warn({ srcfile, dstfile, mapfile })
+      // warn({ srcfile, dstfile, mapfile })
 
       Deno.writeTextFileSync(
         dstfile,
@@ -293,9 +304,33 @@ const httpPlugin = {
       }
       let contents = await ret.text()
 
-      if (url.match(/https*:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/customParseFormat.js/)) {
+
+      // dayjs workarounds :(
+      if (url.match(/https*:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/localizedFormat\/utils.js/)) {
+        // The export setup in this dayjs `utils.js` file is confusing esm.sh and it's replying
+        // with a bad export.  Switch it back to needed specific named exports.
+        // example url:
+        //   https://esm.sh/v99/dayjs@1.11.6/es2022/esm/plugin/localizedFormat/utils.js
         warn(`\nDAYJS WORKAROUND XXX ${url}`)
-        contents = contents.replace(/import\{.* as (.*)\}(from"\/v\d+\/dayjs.*\/plugin\/localizedFormat\/utils\.js")/, 'import {default as $1} $2')
+        const c2 = contents.replace('export{i as default}', 'export const{englishFormats,t,u}=i')
+        if (contents === c2)
+          warn('\n\n\n LIKELY NOT GOOD -- DAYJS PLUGIN WORKAROUND DIDNT TAKE EFFECT \n\n\n\n')
+        else
+          contents = c2
+      }
+
+      if (url.match(/https*:\/\/[^/]+\/v\d+\/@internetarchive\/histogram-date-range[^/]+\/[^/]+\/histogram-date-range\.js/)) {
+        // This ^ file is picking (from esm.sh perspective) the wrong dayjs file to use
+        // (it causes `.year()` methods later to not exist).
+        // So instead of (logically) importing `dayjs/esm/index.js`, import `dayjs` from esm.sh.
+        // example url:
+        // https://esm.sh/v99/@internetarchive/histogram-date-range@0.1.7/es2022/histogram-date-range.js
+        warn(`\nDAYJS HISTOGRAM-DATE-RANGE WORKAROUND XXX ${url}`)
+        const c2 = contents.replace(/dayjs([^/]+)\/[^/]+\/esm\/index\.js/, '/dayjs$1')
+        if (contents === c2)
+          warn('\n\n\n LIKELY NOT GOOD -- DAYJS WORKAROUND DIDNT TAKE EFFECT \n\n\n\n')
+        else
+          contents = c2
       }
 
 
