@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.11'
+const VERSION = '1.0.12'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -302,37 +302,7 @@ const httpPlugin = {
         warn('NOT OK', url, { ret })
         throw new Error(`GET ${url} failed, status: ${ret.status}`)
       }
-      let contents = await ret.text()
-
-
-      // dayjs workarounds :(
-      if (url.match(/https*:\/\/[^/]+\/v\d+\/dayjs.*\/plugin\/localizedFormat\/utils.js/)) {
-        // The export setup in this dayjs `utils.js` file is confusing esm.sh and it's replying
-        // with a bad export.  Switch it back to needed specific named exports.
-        // example url:
-        //   https://esm.sh/v99/dayjs@1.11.6/es2022/esm/plugin/localizedFormat/utils.js
-        warn(`\nDAYJS WORKAROUND XXX ${url}`)
-        const c2 = contents.replace('export{i as default}', 'export const{englishFormats,t,u}=i')
-        if (contents === c2)
-          warn('\n\n\n LIKELY NOT GOOD -- DAYJS PLUGIN WORKAROUND DIDNT TAKE EFFECT \n\n\n\n')
-        else
-          contents = c2
-      }
-
-      if (url.match(/https*:\/\/[^/]+\/v\d+\/@internetarchive\/histogram-date-range[^/]+\/[^/]+\/histogram-date-range\.js/)) {
-        // This ^ file is picking (from esm.sh perspective) the wrong dayjs file to use
-        // (it causes `.year()` methods later to not exist).
-        // So instead of (logically) importing `dayjs/esm/index.js`, import `dayjs` from esm.sh.
-        // example url:
-        // https://esm.sh/v99/@internetarchive/histogram-date-range@0.1.7/es2022/histogram-date-range.js
-        warn(`\nDAYJS HISTOGRAM-DATE-RANGE WORKAROUND XXX ${url}`)
-        const c2 = contents.replace(/dayjs([^/]+)\/[^/]+\/esm\/index\.js/, '/dayjs$1')
-        if (contents === c2)
-          warn('\n\n\n LIKELY NOT GOOD -- DAYJS WORKAROUND DIDNT TAKE EFFECT \n\n\n\n')
-        else
-          contents = c2
-      }
-
+      const contents = await ret.text()
 
       if (OPTS.stash)
         Deno.writeTextFileSync(`${stashfile}.contents`, contents)
