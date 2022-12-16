@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.12'
+const VERSION = '1.0.13'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -106,10 +106,12 @@ async function main() {
       // eslint-disable-next-line no-empty
     } catch {}
 
-    // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
-    // fail (seems like a race condition) maybe 10-25% of the time.
-    warn('\nsleeping 15s and retrying')
-    await exe('sleep 15')
+    if (n + 1 < MAX_RETRIES) {
+      // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
+      // fail (seems like a race condition) maybe 10-25% of the time.
+      warn('\nsleeping 15s and retrying')
+      await exe('sleep 15')
+    }
   }
 
   Deno.exit(1)
@@ -229,6 +231,23 @@ async function convertToES5(result) {
  */
 function upgrade_url(url) {
   const parsed = new URL(url)
+
+  if (parsed?.pathname?.match(/^\/v\d+\/lit-element/)) {
+    const ret = 'https://www-offshoot-lit-element.dev.archive.org/lit-element.js'
+    warn(`\nINTERCEPTING ${url} => ${ret} (v2.5.1)`)
+    return ret
+  }
+
+  if (parsed?.pathname?.match(/^\/v\d+\/lit/) &&
+      !parsed?.pathname?.match(/^\/v\d+\/lit-/) &&
+      !parsed?.pathname?.match(/^\/v\d+\/lit.*(decorators|directive|html)/)) {
+    const ret = 'https://www-offshoot-lit-upgrade.dev.archive.org/lit.js'
+    // const ret = 'https://offshoot.ux.archive.org/lit.js'
+    warn(`\nINTERCEPTING ${url} => ${ret} (v2.5.0)`)
+    return ret
+  }
+
+
   return (
     parsed.protocol === 'http:' &&
     (parsed.hostname === 'esm.sh' || parsed.hostname.endsWith('.archive.org'))
