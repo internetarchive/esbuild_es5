@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.13'
+const VERSION = '1.0.14'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -78,7 +78,7 @@ const entryPoints = OPTS._
 
 const MAX_RETRIES = 5
 const ES6 = OPTS.format === 'es6' // ES6 only -- dont transpile down to ES5
-
+const WARNINGS = {}
 
 /**
  * Bundles and transpiles JS files
@@ -99,12 +99,17 @@ async function main() {
     try {
       // eslint-disable-next-line  no-use-before-define
       await builder()
+      // eslint-disable-next-line no-use-before-define
+      warnings()
 
       // build success
       warn('\n[esbuild] done')
       Deno.exit(0)
-      // eslint-disable-next-line no-empty
+      /* eslint-disable-next-line no-empty */ // deno-lint-ignore no-empty
     } catch {}
+
+    // eslint-disable-next-line no-use-before-define
+    warnings()
 
     if (n + 1 < MAX_RETRIES) {
       // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
@@ -152,6 +157,9 @@ async function builder() {
  *   https://github.com/evanw/esbuild/issues/297#issuecomment-961800886
  */
 async function convertToES5(result) {
+  // eslint-disable-next-line no-use-before-define
+  warnings()
+
   if (ES6) {
     // xxx needs just a bit more work to move the ES6 already created files to desired .min.js
     // when OPTS.names_always_end_with_min -- also need to get the sourceMappingURL= adjusted right
@@ -234,7 +242,9 @@ function upgrade_url(url) {
 
   if (parsed?.pathname?.match(/^\/v\d+\/lit-element/)) {
     const ret = 'https://www-offshoot-lit-element.dev.archive.org/lit-element.js'
-    warn(`\nINTERCEPTING ${url} => ${ret} (v2.5.1)`)
+    const msg = `INTERCEPTING ${url} => ${ret} (v2.5.1)`
+    WARNINGS[msg] = WARNINGS[msg] || 0
+    WARNINGS[msg] += 1
     return ret
   }
 
@@ -243,7 +253,9 @@ function upgrade_url(url) {
       !parsed?.pathname?.match(/^\/v\d+\/lit.*(decorators|directive|html)/)) {
     const ret = 'https://www-offshoot-lit-upgrade.dev.archive.org/lit.js'
     // const ret = 'https://offshoot.ux.archive.org/lit.js'
-    warn(`\nINTERCEPTING ${url} => ${ret} (v2.5.0)`)
+    const msg = `INTERCEPTING ${url} => ${ret} (v2.5.0)`
+    WARNINGS[msg] = WARNINGS[msg] || 0
+    WARNINGS[msg] += 1
     return ret
   }
 
@@ -312,7 +324,7 @@ const httpPlugin = {
       const stashfile = `/tmp/estash/${url}`.replace(/%5E/gi, '^').replace(/\?/, '')
       if (OPTS.stash) {
         Deno.mkdirSync(dirname(stashfile), { recursive: true })
-        // eslint-disable-next-line object-curly-newline
+        /* eslint-disable-next-line object-curly-newline */ // deno-lint-ignore no-unused-vars
         const { socket, data, parser, req, _readableState, _maxListeners, client, ...copy } = ret
         Deno.writeTextFileSync(`${stashfile}.res`, JSON.stringify(copy))
       }
@@ -329,6 +341,18 @@ const httpPlugin = {
       return { contents }
     })
   },
+}
+
+function warnings() {
+  if (Object.keys(WARNINGS).length) {
+    warn('\nWARNINGS with counts:')
+    for (const prop of Object.getOwnPropertyNames(WARNINGS)) {
+      const num_width = 5
+      const num_padded = (' '.repeat(num_width) + WARNINGS[prop]).slice(-num_width)
+      warn(`${num_padded}x ${prop}`)
+      delete WARNINGS[prop]
+    }
+  }
 }
 
 
