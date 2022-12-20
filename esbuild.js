@@ -18,7 +18,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.14'
+const VERSION = '1.0.15'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -65,6 +65,11 @@ const OPTS = yargs(Deno.args).options({
   },
   stash: {
     description: 'debug mode -- write import-ed files to /tmp/estash/ for inspection',
+    type: 'boolean',
+    default: false,
+  },
+  lit: {
+    description: 'transform any request for lit pkg to a pre-built version instead (a prior workaround)',
     type: 'boolean',
     default: false,
   },
@@ -240,19 +245,11 @@ async function convertToES5(result) {
 function upgrade_url(url) {
   const parsed = new URL(url)
 
-  if (parsed?.pathname?.match(/^\/v\d+\/lit-element/)) {
-    const ret = 'https://www-offshoot-lit-element.dev.archive.org/lit-element.js'
-    const msg = `INTERCEPTING ${url} => ${ret} (v2.5.1)`
-    WARNINGS[msg] = WARNINGS[msg] || 0
-    WARNINGS[msg] += 1
-    return ret
-  }
-
-  if (parsed?.pathname?.match(/^\/v\d+\/lit/) &&
+  if (OPTS.lit &&
+      parsed?.pathname?.match(/^\/v\d+\/lit/) &&
       !parsed?.pathname?.match(/^\/v\d+\/lit-/) &&
       !parsed?.pathname?.match(/^\/v\d+\/lit.*(decorators|directive|html)/)) {
-    const ret = 'https://www-offshoot-lit-upgrade.dev.archive.org/lit.js'
-    // const ret = 'https://offshoot.ux.archive.org/lit.js'
+    const ret = 'https://offshoot.ux.archive.org/lit.js'
     const msg = `INTERCEPTING ${url} => ${ret} (v2.5.0)`
     WARNINGS[msg] = WARNINGS[msg] || 0
     WARNINGS[msg] += 1
