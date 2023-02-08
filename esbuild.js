@@ -4,6 +4,7 @@ import * as esbuild from 'https://deno.land/x/esbuild@v0.15.15/mod.js'
 import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
+import windowsize from 'https://esm.archive.org/window-size'
 import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
 import { writeAllSync } from 'https://deno.land/std/streams/write_all.ts'
 
@@ -77,6 +78,7 @@ const OPTS = yargs(Deno.args).options({
   .usage('Usage: esbuild [FILE1] [FILE2] ..')
   .help()
   .alias('help', 'h')
+  .wrap(Math.min(150, windowsize.width - 1))
   .version(VERSION).argv
 const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
@@ -249,7 +251,7 @@ function upgrade_url(url) {
       parsed?.pathname?.match(/^\/v\d+\/lit/) &&
       !parsed?.pathname?.match(/^\/v\d+\/lit-/) &&
       !parsed?.pathname?.match(/^\/v\d+\/lit.*(decorators|directive|html)/)) {
-    const ret = 'https://offshoot.ux.archive.org/lit.js'
+    const ret = 'https://offshoot.prod.archive.org/lit.js'
     const msg = `INTERCEPTING ${url} => ${ret} (v2.5.0)`
     WARNINGS[msg] = WARNINGS[msg] || 0
     WARNINGS[msg] += 1
