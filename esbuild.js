@@ -9,7 +9,7 @@ import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
 import { writeAllSync } from 'https://deno.land/std/streams/write_all.ts'
 
 import { exe } from 'https://av.prod.archive.org/js/util/cmd.js'
-import { warn } from 'https://av.prod.archive.org/js/util/log.js'
+import { log, warn } from 'https://av.prod.archive.org/js/util/log.js'
 
 /*
   Bundles and transpiles JS files.
@@ -142,7 +142,8 @@ async function builder() {
     outdir: OPTS.outdir,
     sourcemap: true,
     loader: { '.js': 'jsx' },
-    minify: ES6 ? OPTS.minify : false, // if we're making ES5, we'll minify later
+    minify: true,
+    // minify: ES6 ? OPTS.minify : false, // if we're making ES5, we'll minify later
     format: ES6 ? 'iife' : OPTS.format,
     banner: ES6 ? { js: `${OPTS.banner}\n${OPTS.regenerator_inline}` } : {},
     footer: ES6 ? { js: OPTS.footer } : {},
@@ -186,15 +187,15 @@ async function convertToES5(result) {
   await Promise.all(
     outputs.map(async (srcfile) => {
       // warn('SWC ES5 THIS', Deno.readTextFileSync(srcfile))
-      const output = OPTS.format === 'iife' ?
-        await swc.transform(Deno.readTextFileSync(srcfile), {
-          jsc: { target: 'es5' },
-          sourceMaps: true,
-          module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
-          // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
-          // do another ESBuild pass later only for minification
-          // minify: true,
-        }) : { code: Deno.readTextFileSync(srcfile) }
+      // const output = OPTS.format === 'iife' ?
+      //   await swc.transform(Deno.readTextFileSync(srcfile), {
+      //     jsc: { target: 'es5' },
+      //     sourceMaps: true,
+      //     module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
+      //     // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
+      //     // do another ESBuild pass later only for minification
+      //     // minify: true,
+      //   }) : { code: Deno.readTextFileSync(srcfile) }
 
       if (OPTS.regenerator_inline)
         output.code = output.code.replace(/require\("regenerator-runtime"\)/, 'regeneratorRuntime')
@@ -203,11 +204,11 @@ async function convertToES5(result) {
 
       // Minify again using esbuild, because we can't trust SWC's minifier.
       // Also, add any banner/footer to each JS file, as well as sourcemap URL.
-      output.code = (await esbuild.transform(output.code, {
-        minify: OPTS.minify,
-        target: OPTS.format === 'iife' ? 'es5' : 'es6',
-        logLevel: OPTS.verbose ? 'verbose' : 'silent',
-      })).code
+      // output.code = (await esbuild.transform(output.code, {
+      //   minify: OPTS.minify,
+      //   target: OPTS.format === 'iife' ? 'es5' : 'es6',
+      //   logLevel: OPTS.verbose ? 'verbose' : 'silent',
+      // })).code
 
       const dstfile = OPTS.names_always_end_with_min
         ? `${OPTS.outdir}/${basename(srcfile, '.js')}.min.js`
