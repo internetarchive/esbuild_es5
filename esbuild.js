@@ -19,7 +19,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.15'
+const VERSION = '1.0.17'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -332,7 +332,11 @@ const httpPlugin = {
         warn('NOT OK', url, { ret })
         throw new Error(`GET ${url} failed, status: ${ret.status}`)
       }
-      const contents = await ret.text()
+      let contents = await ret.text()
+
+      // [HACK] esm.sh is handing back invalid JS here, which fatals sentry...
+      if (args.path.endsWith('/node_process.js'))
+        contents = contents.replace('1000000000n+BigInt', 'BigInt(1000000000)+BigInt')
 
       if (OPTS.stash)
         Deno.writeTextFileSync(`${stashfile}.contents`, contents)
