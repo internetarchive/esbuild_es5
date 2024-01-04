@@ -19,7 +19,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.17'
+const VERSION = '1.0.18'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -318,7 +318,9 @@ const httpPlugin = {
 
       const url = upgrade_url(args.path)
 
-      const ret = await fetch(url)
+      const ret = await fetch(url, {
+        headers: { 'User-Agent': 'wget' }, // avoids `denonext` target from esm.sh urls
+      })
 
       const stashfile = `/tmp/estash/${url}`.replace(/%5E/gi, '^').replace(/\?/, '')
       if (OPTS.stash) {
