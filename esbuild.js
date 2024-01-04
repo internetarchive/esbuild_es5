@@ -2,13 +2,11 @@
 /* eslint-disable semi */
 import * as esbuild from 'https://deno.land/x/esbuild@v0.19.11/mod.js'
 import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
+import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
 import windowsize from 'https://esm.archive.org/window-size'
 import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
-import { writeAllSync } from 'https://deno.land/std/streams/write_all.ts'
-
-import { exe } from 'https://av.prod.archive.org/js/util/cmd.js'
 import { warn } from 'https://av.prod.archive.org/js/util/log.js'
 
 /*
@@ -19,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.18'
+const VERSION = '1.0.19'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -94,11 +92,11 @@ async function main() {
   OPTS.regenerator_inline = OPTS.regenerator_inline ?
     // We prefix each output JS file w/ `regeneratorRuntime` -- so we wont need a separate polyfill.
     // NOTE: we're using jsdelivr here so we can get the "raw source" (which is ES5).
-    (await exe('wget -qO- https://cdn.jsdelivr.net/npm/regenerator-runtime@0.13.9/runtime.js')).concat('\n') : ''
+    (await (await fetch('https://cdn.jsdelivr.net/npm/regenerator-runtime@0.13.9/runtime.js')).text()).concat('\n') : ''
 
   if (!entryPoints.length) return
 
-  await exe(`mkdir -p ${OPTS.outdir}`)
+  await Deno.mkdir(OPTS.outdir, { recursive: true })
 
   warn('\n', { entryPoints })
 
@@ -122,7 +120,7 @@ async function main() {
       // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
       // fail (seems like a race condition) maybe 10-25% of the time.
       warn('\nsleeping 15s and retrying')
-      await exe('sleep 15')
+      await sleep(15)
     }
   }
 
@@ -185,16 +183,16 @@ async function convertToES5(result) {
 
   await Promise.all(
     outputs.map(async (srcfile) => {
-      // warn('SWC ES5 THIS', Deno.readTextFileSync(srcfile))
+      // warn('SWC ES5 THIS', await Deno.readTextFile(srcfile))
       const output = OPTS.format === 'iife' ?
-        await swc.transform(Deno.readTextFileSync(srcfile), {
+        await swc.transform(await Deno.readTextFile(srcfile), {
           jsc: { target: 'es5' },
           sourceMaps: true,
           module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
           // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
           // do another ESBuild pass later only for minification
           // minify: true,
-        }) : { code: Deno.readTextFileSync(srcfile) }
+        }) : { code: await Deno.readTextFile(srcfile) }
 
       if (OPTS.regenerator_inline)
         output.code = output.code.replace(/require\("regenerator-runtime"\)/, 'regeneratorRuntime')
@@ -215,23 +213,27 @@ async function convertToES5(result) {
       const mapfile = `${dstfile}.map`
       // warn({ srcfile, dstfile, mapfile })
 
-      Deno.writeTextFileSync(
+      await Deno.writeTextFile(
         dstfile,
         `${OPTS.banner}\n${OPTS.regenerator_inline}${output.code}\n${OPTS.footer}\n//# sourceMappingURL=${basename(dstfile)}.map`,
       )
       if (output.map)
-        Deno.writeTextFileSync(mapfile, output.map)
+        await Deno.writeTextFile(mapfile, output.map)
       delete kills[mapfile]
 
       if (dstfile !== srcfile)
-        Deno.removeSync(srcfile)
+        await Deno.remove(srcfile)
     }),
   )
 
   // Cleanup: remove intermediary .js.map files;  remove empty subdirs
-  for (const file of Object.keys(kills))
-    Deno.removeSync(file)
-  await exe(`find ${OPTS.outdir} -empty -delete`)
+  for (const file of Object.keys(kills)) {
+    await Deno.remove(file)
+    try {
+      await Deno.remove(dirname(file))
+      /* eslint-disable-next-line no-empty */ // deno-lint-ignore no-empty
+    } catch {}
+  }
 }
 
 
@@ -311,8 +313,8 @@ const httpPlugin = {
       if (OPTS.verbose) {
         warn(`[esbuild] Downloading: ${args.path}`)
       } else {
-        if (!num_downloaded) writeAllSync(Deno.stderr, new TextEncoder().encode('[esbuild] Downloading https:// import(s) '))
-        writeAllSync(Deno.stderr, new TextEncoder().encode('.'))
+        if (!num_downloaded) await Deno.stderr.write(new TextEncoder().encode('[esbuild] Downloading https:// import(s) '))
+        await Deno.stderr.write(new TextEncoder().encode('.'))
         num_downloaded += 1
       }
 
@@ -324,10 +326,10 @@ const httpPlugin = {
 
       const stashfile = `/tmp/estash/${url}`.replace(/%5E/gi, '^').replace(/\?/, '')
       if (OPTS.stash) {
-        Deno.mkdirSync(dirname(stashfile), { recursive: true })
+        await Deno.mkdir(dirname(stashfile), { recursive: true })
         /* eslint-disable-next-line object-curly-newline */ // deno-lint-ignore no-unused-vars
         const { socket, data, parser, req, _readableState, _maxListeners, client, ...copy } = ret
-        Deno.writeTextFileSync(`${stashfile}.res`, JSON.stringify(copy))
+        await Deno.writeTextFile(`${stashfile}.res`, JSON.stringify(copy))
       }
 
       if (!ret.ok || ret.status !== 200) {
@@ -341,7 +343,7 @@ const httpPlugin = {
         contents = contents.replace('1000000000n+BigInt', 'BigInt(1000000000)+BigInt')
 
       if (OPTS.stash)
-        Deno.writeTextFileSync(`${stashfile}.contents`, contents)
+        await Deno.writeTextFile(`${stashfile}.contents`, contents)
 
       return { contents }
     })
