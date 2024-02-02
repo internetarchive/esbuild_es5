@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env --allow-net --allow-ffi
 /* eslint-disable semi */
-import * as esbuild from 'https://deno.land/x/esbuild@v0.19.11/mod.js'
+import * as esbuild from 'https://deno.land/x/esbuild@v0.20.0/mod.js'
 import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
 import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
@@ -17,7 +17,7 @@ import { warn } from 'https://av.prod.archive.org/js/util/log.js'
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.19'
+const VERSION = '1.0.20'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
