@@ -1,5 +1,7 @@
 # esbuild_es5
-minify JS/TS files using `esbuild` and `swc` down to ES5 (uses `deno`)
+Minify JS/TS files using `esbuild` down to ES6 (uses `deno`).
+
+(Prior versions _additionally_ used `swc` to transpile down to ES5 -- so you can use version `1.0.20` or earlier for that if you prefer ES5)
 
 ## Usage
 ```
@@ -26,9 +28,8 @@ Usage: esbuild [FILE1] [FILE2] ..
 Options:
   -o, --outdir                     directory for built files
                                                      [string] [default: "build"]
-  -f, --format                     output format: iife, cjs, esm, es6.  iife def
-                                   aults to es5.  esm implies es6.
-                                                               [default: "iife"]
+  -f, --format                     output format: iife, cjs, esm.  always
+                                   transpiles down to ES6.     [default: "iife"]
       --banner                     string banner (eg: license info) to put at the
                                    head of each built JS file
                                                           [string] [default: ""]
@@ -47,6 +48,9 @@ Options:
                                                       [boolean] [default: false]
       --stash                      debug mode -- write import-ed files to /tmp/e
                                    stash/ for inspection
+                                                      [boolean] [default: false]
+      --lit                        transform any request for lit pkg to a
+                                   pre-built version instead (a prior workaround)
                                                       [boolean] [default: false]
   -h, --help                       Show help                           [boolean]
       --version                    Show version number                 [boolean]

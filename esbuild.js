@@ -1,13 +1,14 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env --allow-net --allow-ffi
 /* eslint-disable semi */
 import * as esbuild from 'https://deno.land/x/esbuild@v0.20.0/mod.js'
-import * as swc from 'https://deno.land/x/swc@0.2.1/mod.ts'
 import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
 import windowsize from 'https://esm.archive.org/window-size'
 import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
-import { warn } from 'https://av.prod.archive.org/js/util/log.js'
+
+// eslint-disable-next-line no-console
+const warn = console.error.bind(console)
 
 /*
   Bundles and transpiles JS files.
@@ -26,7 +27,7 @@ const OPTS = yargs(Deno.args).options({
     alias: 'o',
   },
   format: {
-    description: 'output format: iife, cjs, esm, es6.  iife defaults to es5.  esm implies es6.',
+    description: 'output format: iife, cjs, esm.  always transpiles down to ES6.',
     default: 'iife',
     alias: 'f',
   },
@@ -82,7 +83,6 @@ const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
 
 const MAX_RETRIES = 5
-const ES6 = OPTS.format === 'es6' // ES6 only -- dont transpile down to ES5
 const WARNINGS = {}
 
 /**
@@ -140,14 +140,14 @@ async function builder() {
     outdir: OPTS.outdir,
     sourcemap: true,
     loader: { '.js': 'jsx' },
-    minify: ES6 ? OPTS.minify : false, // if we're making ES5, we'll minify later
-    format: ES6 ? 'iife' : OPTS.format,
-    banner: ES6 ? { js: `${OPTS.banner}\n${OPTS.regenerator_inline}` } : {},
-    footer: ES6 ? { js: OPTS.footer } : {},
+    minify: OPTS.minify,
+    format: OPTS.format,
+    banner: { js: `${OPTS.banner}\n${OPTS.regenerator_inline}` },
+    footer: { js: OPTS.footer },
     target: ['es6'], // AKA es2015 -- the lowest `esbuild` can go
-    metafile: true,  // for `convertToES5()`
+    metafile: true,  // for `cleanup()`
     // eslint-disable-next-line  no-use-before-define
-  }).then(convertToES5) // takes all `esbuild` output together and converts in parallel to ES5
+  }).then(cleanup)
     .catch((e) => {
       warn('FATAL:', e)
       throw e
@@ -156,79 +156,44 @@ async function builder() {
 
 
 /**
- * Converter that transpiles ES6 code from `esbuild` to ES5 via `swc`
- *
- * Derived from magnifique:
- *   https://github.com/evanw/esbuild/issues/297#issuecomment-961800886
+ * Cleans up transpiled files from `esbuild`
  */
-async function convertToES5(result) {
+async function cleanup(result) {
   // eslint-disable-next-line no-use-before-define
   warnings()
 
-  if (ES6) {
-    // xxx needs just a bit more work to move the ES6 already created files to desired .min.js
-    // when OPTS.names_always_end_with_min -- also need to get the sourceMappingURL= adjusted right
-    warn({ result })
-    return
+  warn('\n[tidying up files]')
+
+  for (const file of Object.keys(result.metafile.outputs)) {
+    // eslint-disable-next-line no-nested-ternary
+    const dstfile = `${OPTS.outdir}/${basename(file)}`.replace(
+      OPTS.names_always_end_with_min ? /\.(js|js\.map)$/ : /__noop_dont_do_anything_here_/,
+      '.min.$1',
+    )
+    if (OPTS.verbose)
+      warn({ file, dstfile })
+
+    if (dstfile !== file) {
+      await Deno.rename(file, dstfile)
+
+      if (OPTS.names_always_end_with_min && dstfile.endsWith('.min.js')) {
+        // We create file pairs named like this:
+        //   build/js/tv.min.js
+        //   build/js/tv.min.js.map
+
+        //  Update the .map url
+        const code = await Deno.readTextFile(dstfile)
+        const updated = code.replace(/(\/\/# sourceMappingURL=.*)(\.js\.map)/, '$1.min$2')
+        if (code === updated)
+          warn(`LOGIC ERROR ${basename(dstfile)}sourceMappingURL .js.map didnt get udpated as it should have!`)
+
+        await Deno.writeTextFile(dstfile, updated)
+      }
+    }
   }
 
-  warn('\n[swc] ES6 => ES5')
-
-  const outputs = Object.keys(result.metafile.outputs)
-    .filter((file) => file.endsWith('.js')) // (excludes .js.map files, basically)
-
-  const kills = {}
-  for (const key of Object.keys(result.metafile.outputs).filter((file) => file.endsWith('.js.map')))
-    kills[key] = true
-
-  await Promise.all(
-    outputs.map(async (srcfile) => {
-      // warn('SWC ES5 THIS', await Deno.readTextFile(srcfile))
-      const output = OPTS.format === 'iife' ?
-        await swc.transform(await Deno.readTextFile(srcfile), {
-          jsc: { target: 'es5' },
-          sourceMaps: true,
-          module: { type: OPTS.format === 'iife' ? 'commonjs' : 'es6' },
-          // Ran into a bug using SWC's minifier on ESBuild's output. Instead of minfying here,
-          // do another ESBuild pass later only for minification
-          // minify: true,
-        }) : { code: await Deno.readTextFile(srcfile) }
-
-      if (OPTS.regenerator_inline)
-        output.code = output.code.replace(/require\("regenerator-runtime"\)/, 'regeneratorRuntime')
-
-      // warn('ESBUILD MINIFY THIS', output.code)
-
-      // Minify again using esbuild, because we can't trust SWC's minifier.
-      // Also, add any banner/footer to each JS file, as well as sourcemap URL.
-      output.code = (await esbuild.transform(output.code, {
-        minify: OPTS.minify,
-        target: OPTS.format === 'iife' ? 'es5' : 'es6',
-        logLevel: OPTS.verbose ? 'verbose' : 'silent',
-      })).code
-
-      const dstfile = OPTS.names_always_end_with_min
-        ? `${OPTS.outdir}/${basename(srcfile, '.js')}.min.js`
-        : `${OPTS.outdir}/${basename(srcfile)}`
-      const mapfile = `${dstfile}.map`
-      // warn({ srcfile, dstfile, mapfile })
-
-      await Deno.writeTextFile(
-        dstfile,
-        `${OPTS.banner}\n${OPTS.regenerator_inline}${output.code}\n${OPTS.footer}\n//# sourceMappingURL=${basename(dstfile)}.map`,
-      )
-      if (output.map)
-        await Deno.writeTextFile(mapfile, output.map)
-      delete kills[mapfile]
-
-      if (dstfile !== srcfile)
-        await Deno.remove(srcfile)
-    }),
-  )
-
-  // Cleanup: remove intermediary .js.map files;  remove empty subdirs
-  for (const file of Object.keys(kills)) {
-    await Deno.remove(file)
+  // Cleanup: remove any empty subdirs
+  for (const file of Object.keys(result.metafile.outputs)) {
     try {
       await Deno.remove(dirname(file))
       /* eslint-disable-next-line no-empty */ // deno-lint-ignore no-empty
