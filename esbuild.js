@@ -47,12 +47,6 @@ const OPTS = yargs(Deno.args).options({
     default: true,
     alias: 'm',
   },
-  regenerator_inline: {
-    description: 'makes output more of standalone/entrypoint by inlining regeneratorRuntime at the top (of each built file)',
-    type: 'boolean',
-    default: true,
-    alias: 'r',
-  },
   names_always_end_with_min: {
     description: 'even if you dont elect to `--minify`, still use `.min.js` for your built suffixes',
     type: 'boolean',
@@ -65,11 +59,6 @@ const OPTS = yargs(Deno.args).options({
   },
   stash: {
     description: 'debug mode -- write import-ed files to /tmp/estash/ for inspection',
-    type: 'boolean',
-    default: false,
-  },
-  lit: {
-    description: 'transform any request for lit pkg to a pre-built version instead (a prior workaround)',
     type: 'boolean',
     default: false,
   },
@@ -89,11 +78,6 @@ const WARNINGS = {}
  * Bundles and transpiles JS files
  */
 async function main() {
-  OPTS.regenerator_inline = OPTS.regenerator_inline ?
-    // We prefix each output JS file w/ `regeneratorRuntime` -- so we wont need a separate polyfill.
-    // NOTE: we're using jsdelivr here so we can get the "raw source" (which is ES5).
-    (await (await fetch('https://cdn.jsdelivr.net/npm/regenerator-runtime@0.13.9/runtime.js')).text()).concat('\n') : ''
-
   if (!entryPoints.length) return
 
   await Deno.mkdir(OPTS.outdir, { recursive: true })
@@ -142,7 +126,7 @@ async function builder() {
     loader: { '.js': 'jsx' },
     minify: OPTS.minify,
     format: OPTS.format,
-    banner: { js: `${OPTS.banner}\n${OPTS.regenerator_inline}` },
+    banner: { js: OPTS.banner },
     footer: { js: OPTS.footer },
     target: ['es6'], // AKA es2015 -- the lowest `esbuild` can go
     metafile: true,  // for `cleanup()`
@@ -213,19 +197,6 @@ async function cleanup(result) {
  */
 function upgrade_url(url) {
   const parsed = new URL(url)
-
-  if (OPTS.lit &&
-      parsed?.pathname?.match(/^\/v\d+\/lit/) &&
-      !parsed?.pathname?.match(/^\/v\d+\/lit-/) &&
-      !parsed?.pathname?.match(/^\/v\d+\/lit.*(decorators|directive|html)/)) {
-    const ret = 'https://offshoot.prod.archive.org/lit.js'
-    const msg = `INTERCEPTING ${url} => ${ret} (v2.5.0)`
-    WARNINGS[msg] = WARNINGS[msg] || 0
-    WARNINGS[msg] += 1
-    return ret
-  }
-
-
   return (
     parsed.protocol === 'http:' &&
     (parsed.hostname === 'esm.sh' || parsed.hostname.endsWith('.archive.org'))
