@@ -4,7 +4,7 @@ import * as esbuild from 'https://deno.land/x/esbuild@v0.20.0/mod.js'
 import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
-import windowsize from 'https://esm.archive.org/window-size'
+import windowsize from 'https://esm.ext.archive.org/window-size@1.1.1'
 import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
 
 // eslint-disable-next-line no-console
@@ -101,8 +101,8 @@ async function main() {
     warnings()
 
     if (n + 1 < MAX_RETRIES) {
-      // It's common enough that `import https://esm.archive.org/lit/decorators.js` can _sometimes_
-      // fail (seems like a race condition) maybe 10-25% of the time.
+      // It's common enough in the past that `import https://esm.sh/lit/decorators.js` _sometimes_
+      // fails (seems like a race condition) maybe 10-25% of the time.
       warn('\nsleeping 15s and retrying')
       await sleep(15)
     }
