@@ -18,7 +18,7 @@ const warn = console.error.bind(console)
   TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '1.0.20'
+const VERSION = '2.0.2'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
