@@ -14,11 +14,9 @@ const warn = console.error.bind(console)
   Bundles and transpiles JS files.
 
   Pass in one or more JS files on the command line to build them all in parallel.
-
-  TODO: can make `.map` files point to *orignal* code?
 */
 
-const VERSION = '2.0.2'
+const VERSION = '2.0.3'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -72,7 +70,6 @@ const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
 
 const MAX_RETRIES = 5
-const WARNINGS = {}
 
 /**
  * Bundles and transpiles JS files
@@ -88,17 +85,12 @@ async function main() {
     try {
       // eslint-disable-next-line  no-use-before-define
       await builder()
-      // eslint-disable-next-line no-use-before-define
-      warnings()
 
       // build success
       warn('\n[esbuild] done')
       Deno.exit(0)
       /* eslint-disable-next-line no-empty */ // deno-lint-ignore no-empty
     } catch {}
-
-    // eslint-disable-next-line no-use-before-define
-    warnings()
 
     if (n + 1 < MAX_RETRIES) {
       // It's common enough in the past that `import https://esm.sh/lit/decorators.js` _sometimes_
@@ -143,9 +135,6 @@ async function builder() {
  * Cleans up transpiled files from `esbuild`
  */
 async function cleanup(result) {
-  // eslint-disable-next-line no-use-before-define
-  warnings()
-
   warn('\n[tidying up files]')
 
   for (const file of Object.keys(result.metafile.outputs)) {
@@ -285,19 +274,6 @@ const httpPlugin = {
     })
   },
 }
-
-function warnings() {
-  if (Object.keys(WARNINGS).length) {
-    warn('\nWARNINGS with counts:')
-    for (const prop of Object.getOwnPropertyNames(WARNINGS)) {
-      const num_width = 5
-      const num_padded = (' '.repeat(num_width) + WARNINGS[prop]).slice(-num_width)
-      warn(`${num_padded}x ${prop}`)
-      delete WARNINGS[prop]
-    }
-  }
-}
-
 
 // eslint-disable-next-line
 void main()
