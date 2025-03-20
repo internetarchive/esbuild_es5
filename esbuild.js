@@ -29,6 +29,16 @@ const OPTS = yargs(Deno.args).options({
     default: 'iife',
     alias: 'f',
   },
+  target: {
+    description: 'output target format. defaults to es6 (AKA es2015), the oldest option',
+    default: 'es6',
+    alias: 't',
+  },
+  platform: {
+    description: 'platform target, browser or node',
+    default: 'browser',
+    alias: 'p',
+  },
   banner: {
     description: 'string banner (eg: license info) to put at the head of each built JS file',
     type: 'string',
@@ -113,6 +123,7 @@ async function builder() {
     ],
     logLevel: OPTS.verbose ? 'verbose' : 'warning',
     bundle: true,
+    platform: OPTS.platform,
     outdir: OPTS.outdir,
     sourcemap: true,
     loader: { '.js': 'jsx' },
@@ -120,7 +131,7 @@ async function builder() {
     format: OPTS.format,
     banner: { js: OPTS.banner },
     footer: { js: OPTS.footer },
-    target: ['es6'], // AKA es2015 -- the lowest `esbuild` can go
+    target: [OPTS.target],
     metafile: true,  // for `cleanup()`
     // eslint-disable-next-line  no-use-before-define
   }).then(cleanup)
