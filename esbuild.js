@@ -5,7 +5,7 @@ import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
 import yargs from 'https://deno.land/x/yargs/deno.ts'
 import windowsize from 'https://esm.ext.archive.org/window-size@1.1.1'
-import { basename, dirname } from 'https://deno.land/std/path/mod.ts'
+import { basename, dirname, normalize } from 'https://deno.land/std/path/mod.ts'
 
 // eslint-disable-next-line no-console
 const warn = console.error.bind(console)
@@ -38,6 +38,11 @@ const OPTS = yargs(Deno.args).options({
     description: 'platform target, browser or node',
     default: 'browser',
     alias: 'p',
+  },
+  import_map: {
+    description: 'import map file to use',
+    type: 'string',
+    default: '',
   },
   banner: {
     description: 'string banner (eg: license info) to put at the head of each built JS file',
@@ -80,12 +85,20 @@ const entryPoints = OPTS._
 // warn({ entryPoints, OPTS })
 
 const MAX_RETRIES = 5
+/** @type {ImportMap} */
+let importMap = null;
 
 /**
  * Bundles and transpiles JS files
  */
 async function main() {
   if (!entryPoints.length) return
+
+  importMap = new ImportMap()
+  if (OPTS.import_map) {
+    await importMap.loadFile(OPTS.import_map)
+  }
+  await importMap.loadEnv()
 
   await Deno.mkdir(OPTS.outdir, { recursive: true })
 
@@ -205,6 +218,70 @@ function upgrade_url(url) {
   )
 }
 
+class ImportMap {
+  /**
+   * List of the regex to match and the replacement
+   * @type {Array<{ regex: RegExp, replacement: string }>}
+   **/
+  mappings = []
+
+  /** Basically a concatenation of all the regexes */
+  regex = /^$/g
+
+  /** Load the import map from an environment variable */
+  async loadEnv() {
+    const importMapEnv = Deno.env.get('IMPORT_MAP')
+    if (importMapEnv) {
+      await this.loadFile(importMapEnv)
+    }
+  }
+
+  /** Load the import map from a specific filepath */
+  async loadFile(path) {
+    const filepath = normalize(path)
+    const file = await Deno.readTextFile(filepath)
+    return this.loadImportMap(JSON.parse(file))
+  }
+
+  /**
+   * Load a raw import map object
+   * @param {{ imports: Record<string, string> }} importMap
+   */
+  loadImportMap(importMap) {
+    function _escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    }
+
+    for (const [key, value] of Object.entries(importMap.imports)) {
+      if (key.endsWith('/') && !value.endsWith('/')) {
+        throw new Error(`Import specifier "${key}" must end with a "/" in the import map`)
+      }
+
+      this.mappings.push({
+        regex: new RegExp(_escapeRegExp(key) + (key.endsWith('/') ? '(.*)' : '')),
+        replacement: value
+      })
+    }
+    this.regex = this._buildRegex()
+  }
+
+  /**
+   * Maps the import path if it exists, otherwise returns it as-is
+   * @param {string} importPath 
+   * @returns {string}
+   */
+  resolve(importPath) {
+    const mapping = this.mappings.find(m => m.regex.test(importPath))
+    if (!mapping) return importPath
+
+    return importPath.replace(mapping.regex, ($0, $1) => mapping.replacement + ($1 || ''))
+  }
+
+  _buildRegex() {
+    const regex = this.mappings.map(m => m.regex.source).join('|')
+    return new RegExp(`^${regex}$`, 'g')
+  }
+}
 
 /**
  * Plugin that allows `import()` of fully-qualified URLs in JS that can be bundled and transpiled.
@@ -225,10 +302,15 @@ const httpPlugin = {
     // esbuild doesn't attempt to map them to a file system location.
     // Tag them with the "https-url" namespace to associate them with
     // this plugin.
-    build.onResolve({ filter: /^https?:\/\// }, (args) => ({
-      path: upgrade_url(args.path),
-      namespace: 'https-url',
-    }))
+    build.onResolve({ filter: new RegExp('(^https?://|' + importMap.regex.source + ')') }, (args) => {
+      const mapping = importMap.resolve(args.path);
+      if (/^https?:\/\//.test(mapping)) {
+        return {
+          path: upgrade_url(mapping),
+          namespace: 'https-url',
+        }
+      }
+    })
 
     // We also want to intercept all import paths inside downloaded
     // files and resolve them against the original URL. All of these
