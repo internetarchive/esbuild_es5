@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env --allow-net --allow-ffi
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env --allow-net --allow-ffi --allow-import
 /* eslint-disable semi */
 import * as esbuild from 'https://deno.land/x/esbuild@v0.20.0/mod.js'
 import { sleep } from 'https://deno.land/x/sleep/mod.ts'
@@ -16,7 +16,7 @@ const warn = console.error.bind(console)
   Pass in one or more JS files on the command line to build them all in parallel.
 */
 
-const VERSION = '2.0.3'
+const VERSION = '2.0.4'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
@@ -267,7 +267,7 @@ class ImportMap {
 
   /**
    * Maps the import path if it exists, otherwise returns it as-is
-   * @param {string} importPath 
+   * @param {string} importPath
    * @returns {string}
    */
   resolve(importPath) {
