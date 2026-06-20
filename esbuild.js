@@ -3,7 +3,7 @@
 import * as esbuild from 'https://deno.land/x/esbuild@v0.20.0/mod.js'
 import { sleep } from 'https://deno.land/x/sleep/mod.ts'
 
-import yargs from 'https://deno.land/x/yargs/deno.ts'
+import yargs from 'https://deno.land/x/yargs@v17.7.2-deno/deno.ts'
 import windowsize from 'https://esm.ext.archive.org/window-size@1.1.1'
 import { basename, dirname, normalize } from 'https://deno.land/std/path/mod.ts'
 
@@ -16,7 +16,7 @@ const warn = console.error.bind(console)
   Pass in one or more JS files on the command line to build them all in parallel.
 */
 
-const VERSION = '2.0.4'
+const VERSION = '2.0.5'
 const OPTS = yargs(Deno.args).options({
   outdir: {
     description: 'directory for built files',
