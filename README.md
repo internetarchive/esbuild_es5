@@ -5,13 +5,13 @@ Minify JS/TS files using `esbuild` down to ES6 (uses `deno`).
 
 ## Usage
 ```sh
-deno run --allow-read --allow-write --allow-net --allow-run --allow-env --allow-import https://deno.land/x/esbuild_es5/esbuild.js [FILE1] [FILE2] ..
+deno run --allow-read --allow-write --allow-net --allow-run --allow-env --allow-import https://cdn.jsdelivr.net/gh/internetarchive/esbuild_es5@latest/esbuild.js [FILE1] [FILE2] ..
 ```
 
 or
 
 ```sh
-deno install --allow-read --allow-write --allow-net --allow-run --allow-env --allow-import https://deno.land/x/esbuild_es5/esbuild.js
+deno install --allow-read --allow-write --allow-net --allow-run --allow-env --allow-import https://cdn.jsdelivr.net/gh/internetarchive/esbuild_es5@latest/esbuild.js
 
 esbuild [FILE1] [FILE2] ..
 ```
